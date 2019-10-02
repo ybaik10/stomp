@@ -41,11 +41,13 @@ for (i in (1:nrow(data))[residentrows])
   household <- which(datacopy$record_id==datacopy[i,"record_id"] & datacopy$redcap_event_name=="household_info_arm_1")
   datacopy[i,is.na(data[i,])] <- datacopy[household,is.na(data[i,])]
 }
+save(datacopy, file="datacopy_20190930.Rdata")
 
-
-## cleaner version, but latop memory can't handle it
+## cleaner version, but latop memory could't handle it:
 # coalesce_by_column <- function(df) {
 #   return(dplyr::coalesce(!!! as.list(df)))
 # }
 # cc <- rb %>% group_by(record_id, residentnumber) %>% summarise_all(coalesce_by_column)
 # save(cc, file="cc_20190930.Rdata")
+
+
