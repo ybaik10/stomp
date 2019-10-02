@@ -1,0 +1,56 @@
+---
+title: "STOMP_com_phase_yb"
+output: html_document
+---
+
+```{r setup}
+d<- d_original <- read.csv("STOMPTBMainCasesCont_DATA_2019-09-30_1129.csv", header = TRUE)
+
+# After pilot 
+for (i in colnames(d %>% select(contains("date")))){
+  d[[i]] <- as.Date.factor(d[[i]], format="%Y-%m-%d", order=TRUE)
+}
+d$pilot <- ifelse(!is.na(d$date_enrolled_case),d$date_enrolled_case,
+                        ifelse(!is.na(d$date_screened_case),d$date_screened_case,
+                              ifelse(!is.na(d$com_date_enrolled_case),d$com_date_enrolled_case,
+                                     ifelse(!is.na(d$com_date_screened_case),d$com_date_screened_case,
+                                            ifelse(!is.na(d$date_enrolled_ctrl),d$date_enrolled_ctrl,
+                                                   ifelse(!is.na(d$com_date_enrolled_ctrl),d$com_date_enrolled_ctrl,
+                                                          ifelse(!is.na(d$ct_date_enrolled),d$ct_date_enrolled,
+                                                                 ifelse(!is.na(d$ct_screen_date),d$ct_screen_date,NA))))))))
+d$pilot1<-as.Date(d$pilot, origin="1970-01-01")
+
+# Eligible pop.
+duns<-d[which(d$redcap_event_name=="tb_case_enrollment_arm_1"|d$redcap_event_name=="control_enrollment_arm_2"),]
+ds<-d[which(((d$redcap_event_name=="tb_case_enrollment_arm_3"& d$com_caseagreed_screening==1& d$com_ineligcase_screening___0==1)|
+             (d$com_reclassified_as_case==1)|
+            (d$redcap_event_name=="control_enrollment_arm_4"& d$com_inelig_screening_ctrl___0==1& d$com_agreed_screening_ctrl==1& 
+             (!d$not_really_a_control___1==1&!d$not_really_a_control___2==1&!d$not_really_a_control___3==1&
+              !d$ineligible_control___1==1&!d$ineligible_control___2==1&!d$ineligible_control___3==1))|
+            (d$redcap_event_name=="contact_enrollment_arm_5"& (d$ct_agreed_screening==1|d$ct_agreed_screening_assent==1)&
+             d$ct_contacted_screening==1))& #& d$ct_previously_enrolled==0 (n=1)
+            (d$pilot1 > as.Date("2018-05-22"))),]
+# length(unique(ds$studyid))
+# temp<-ds[which(ds$com_ctrl_type==2),]
+# temp1<-ds[which(ds$com_screening_method_ctrl==2|ds$com_screening_method_ctrl==3),]
+# temp$studyid %in% temp1$studyid
+# temp2<-ds[which(ds$com_screening_method_case==4),]
+# temp2$studyid %in% ds5$studyid
+
+# Pair-less control
+ds3 <- ds[which(ds$redcap_event_name=="tb_case_enrollment_arm_3"),]
+ds4 <- ds[which(ds$redcap_event_name=="control_enrollment_arm_4"),]
+ds5 <- ds[which(ds$redcap_event_name=="contact_enrollment_arm_5"),]
+# ds4_1 <- ds4[which(ds4$id3_com %in% ds3$id3_com),]
+# table(ds$com_screening_method_case); table(ds$com_ctrl_type); table(ds$com_screening_method_ctrl)
+# ds4_exc <- ds4[!(ds4$studyid %in% ds4_1$studyid),]
+
+# Final data set
+ds_f <- rbind(ds3, ds4)
+# ds_f <- rbind(ds3, ds4_1, ds5)
+write.csv(ds_f, "FINSTOMP_DATA_2019-09-30.csv")
+# table(ds_f$ct_ever_screened)
+# ds_f_exc <- ds[!(ds$studyid %in% ds_f$studyid),]; 
+# ds_f_exc_case <- ds[(ds$id3_com %in% ds_f_exc$id3_com),]; ds_f_exc_case$id3_com
+```
+
