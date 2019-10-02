@@ -8,3 +8,5 @@ data$date_enrolled[data$date_enrolled==""] <- as.character(data$com_date_enrolle
 data$date_enrolled[data$date_enrolled==""] <- as.character(data$com_date_enrolled_ctrl[data$date_enrolled==""])
 data$date_enrolled[data$date_enrolled==""] <- as.character(data$ct_date_enrolled[data$date_enrolled==""])
 
+# exclude pilot phase data (neeed to confirm exact date)
+data <- subset(data, as.Date(date_enrolled) >= as.Date("2018-05-22"))
