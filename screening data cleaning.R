@@ -2,6 +2,7 @@
 # change file name to later local data file (don't store redcap data set on github)
 source("STOMPTBCommunityWide_R_2019-09-30_1156.r")
 require(dplyr)
+require(binom)
 
 # copy the relevant household info to the start of each resident row
 # matching by record id
@@ -47,3 +48,9 @@ screendata[which(screendata$age<15),c("res_age", "res1_age","res2_age")]
 screendata[which(screendata$age==2),c("age")] <- NA
 screendata[which(screendata$res1_age==2),c("res1_age")] <- NA
 
+screendata$res_noconsent[screendata$res_notes %in% c("REFUSED TO PARTICIPATE.", "REFUSED TO BE SCREENED.","SAYS WAS SCREENED AT MULAGO. REFUSED TO PARTICIPATE")]<-1
+screendata$res_prior_stomp[screendata$res_notes %in% c("ALREADY SCREENED AS A-97446", "SHE IS SAID TO HAVE BEEN SCREENED THE THE VBE AT TRANSAM FACTORY")]<-1
+screendata$res_prior_stomp[screendata$res_check_iris_id=="699964428959201903006606" & screendata$res_prior_stomp_how___1==1] <-1
+
+table(screendata$xpertscreen_category, screendata$xpertscreen_category.factor)
+screendata$xpertscreen_category[screendata$xpertscreen_result=="INVALID"] <- 8

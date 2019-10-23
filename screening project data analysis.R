@@ -120,7 +120,7 @@ screendata$prior <- ifelse(screendata$seenathome==1,
                            ifelse(screendata$res_prior_stomp==1, 1, 0), NA)
 screendata$noconsent <- ifelse(screendata$seenathome==1,
                            ifelse(screendata$res_noconsent==1, 1, 0), NA)
-screendata$refused <- screendata$noconsent & !(screendata$ineligible | screendata$prior)
+screendata$refused <- screendata$noconsent & (screendata$ineligible | screendata$prior)%in%c(0,NA)
 screendata$excluded <- screendata$ineligible | screendata$prior | screendata$refused
 screendata$screened <- ifelse(screendata$seenathome & (!screendata$excluded | is.na(screendata$excluded)), ifelse(screendata$screening_id != "", 1, 0), NA)
 table(screendata$excluded, screendata$screened, useNA = 'ifany') # 4 eligible but not assigned a screening id 
@@ -161,7 +161,67 @@ median(subset(screendata,seenathome==1)$age, na.rm=T); median(notseen, na.rm=T);
 
 round(cbind(femtable, prop.table(femtable, margin = 1)),digits = 2)
 
-# found at home, trueeligible
-# screened away from home
+# among those found at home, screened versus not screened (ineligible or refused, with or without priors included)
+# very few 'ineligible', but will look at ineligibles (besides priors) and refusals, versus those screened:
+screendata %>% filter(seenathome==1 & prior %in% c(NA,0)) %>% group_by(screened) %>% summarize(median(age, na.rm=T), mean(female, na.rm=T), mean(residentnumber==1&res1_head_yn==1, na.rm=T), n())
+# Those screened at home (versus refusal) are a little younger, more female, and less likely to be head of household, but differences are small.
+
+
+############# Prevalence of TB ####################
+screendata %>% filter(screened==1) %>% count(xpertscreen_category.factor) # consented at home
+screendata %>% filter(screenedaway==1) %>% count(xpertscreen_category.factor) # consented away
+
+screendata %>% filter(screened==1 & as.Date(res_interact_date, format="%Y-%m-%d") < as.Date("2019-09-01", format="%Y-%m-%d")) %>% count(xpertscreen_category.factor) # consented at home
+screendata %>% filter(screenedaway==1 & as.Date(res_interact_date, format="%Y-%m-%d") < as.Date("2019-09-01", format="%Y-%m-%d")) %>% count(xpertscreen_category.factor) # consented away
+
+# sputum volume and quantity
+screendata %>% filter(screened==1|screenedaway==1) %>% count(xpertscreen_appearance)
+par(mfrow=c(1,1)); screendata %>% filter(screened==1|screenedaway==1) %>% select(xpertscreen_volume) %>% hist # looks like a long tail, but there are several in the 20-40 ml range, looks like intentionally entered data
+screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_volume < 5) %>% select(xpertscreen_volume) %>% hist
+# could do sensiivity analysis that excludes those <1ml, or salivary (about half of all specimens), but probably best to assume they don't have true TB.
+
+# is salivary sputum associated with invalid results? No.
+table(screendata$xpertscreen_appearance, screendata$xpertscreen_category.factor) #No it isn't, and many are positive. But there are several invalid/indeterminate with no appearance recorded. all rejected:
+screendata %>% filter(xpertscreen_category.factor=="Invalid or indeterminate") %>% select(xpertscreen_volume, xpertscreen_result_comment, xpertscreen_notes)
+
+screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)
+screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% group_by(screenedaway) %>% count(xpertscreen_category)
+
+# estimate prevalence among those screened, with binomial confidence intervals:
+prev <- function(count)
+{
+  rownames(count) <- count$xpertscreen_category
+  return(binom.agresti.coull(count["1","n"], sum(count[,'n'])))
+}
+(screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
+(screendata %>% filter(screened==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
+(screendata %>% filter(screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
+
+chisq.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$screened, 
+           subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$xpertscreen_category )
+
+# can add sensitivity analysis for poor quality (exclude provided low-volume specimens) and for rejected specimens (assume negative)
+
+# characteristics of cases:
+# -	Sex and age, compared to overall and screened populations
+# -	Variation in prevalence by zone
+# -	Income/employment/education/etc (versus com controls?)
+# -	Migration of cases (versus com controls?) incl time in study area and frequency of short- and long-distance travel
+# -	Variation in prevalence by screening location/approach
+
+
+
+# question for team: where are we capturing people who tell us they are on treatment when we screen?
+
+### Need to add cases diagnosed at our health facilities and elsewhere, to an adjusted estimate of community prevalence ###
+
+# can look at risk factors for TB
+
+# can 
+
+
+##################################################
+# Once we bring in case enrollment data:
+# Differences between 
 # cases, enrolled
 # cases, identified not enrolled
