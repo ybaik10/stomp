@@ -5,6 +5,7 @@ table(screendata$residentnumber, useNA = "ifany")
 
 # describe househod data collection process
 sum(screendata$redcap_event_name=="household_info_arm_1") # number of households enumerated during door to door screening
+households <- subset(screendata, redcap_event_name=="household_info_arm_1")
 households %>% count(hh_contact.factor) # about half of households were enumerated but no contact made
 mean(households$hh_contact, na.rm=T)
 households %>% filter(hh_contact.factor=="No") %>% count(hh_neighbors.factor)
@@ -63,6 +64,7 @@ nrow(members)/nrow(detailed) # adult residents per included household matches ab
 
 mean(members$res1_female, na.rm=T) # those we enumerated are just over half female
 table(members$res1_female, members$res1_age>30, useNA = "ifany") # breakdown by age (>/< 30) and sex. 
+summary(members$res1_age)
 
 # those we screened at home versus other households residents
 # i'm not going to match up the members info with the individual resident info right now, but we could try
@@ -74,6 +76,9 @@ seenathome %>% count(res_prior_stomp.factor, res_ineligible2___1.factor, res_pri
 # several hundred more reported prior participation, mostly with no particular role checked and no details typed - maybe because issues with our forms, could look at date ranges for this. of those checked but not verified, >100 screening, 1 case, 1 contact. 
 seenathome %>% filter(res_prior_stomp==1 & res_prior_stomp_how___1==0, res_prior_stomp_how___2==0, res_prior_stomp_how___3==0, res_prior_stomp_how___4==0) %>% select(res_prior_stomp_where)
 seenathome %>% filter(res_prior_stomp==1 & res_prior_stomp_how___1==1) %>% select(res_prior_stomp_where)
+
+
+
 eligible <- seenathome %>% filter(res_ineligible1___1==0 & res_ineligible2___1==0)
 nrow(seenathome)
 nrow(eligible)
@@ -94,8 +99,69 @@ for (i in 1:nrow(prior))
   if (length(n)>1)   
     prior$matchid2[i] <- screendata$screening_id[n[2]]
 }
+matched <- merge(x=prior, y=screendata, by.x = "matchid", by.y="screening_id", all = F)
+matched2 <- merge(x=prior, y=screendata, by.x = "matchid2", by.y="screening_id", all = F)
+cbind(matched$age.x, matched$age.y)
+cbind(matched2$age.x, matched2$age.y)
+cbind(matched$female.x, matched$female.y)
 prior %>% filter(res_check_iris_id != "") %>% summarize(mean(!is.na(matchid)))
-# found matches in our screening data for 65% of those who reported it and provided an iris scan. would be interesting to look at who these people are who were screened 2 (or more) times. And should make sure their demographics match. 
+# found matches in our screening data for 65% of those who reported it and provided an iris scan. confirmed here that their demographics match. 
 
-trueeligible <- eligible %>% filter(res_parishid %in% 1:3 & res_prior_stomp != 1)
-# 
+# Most who reported prior participation were excluded from rescreening, even if prior participation couldn't be confirmed etc
+trueeligible <- eligible %>% filter(res_parishid %in% 1:3 & !(res_prior_stomp == 1))
+
+# compare groups. dummary variables may be useful
+screendata$studyarea <- ifelse(screendata$res_parishid %in% 1:3, 1, 0)
+screendata$seenathome <- ifelse(screendata$residentnumber>0 & screendata$studyarea, 
+                                ifelse(screendata$res_cont_yn==1, 1, 0), NA)
+screendata$ineligible <- ifelse(screendata$seenathome==1, 
+                                ifelse(screendata$res_ineligible1___1==1 | screendata$res_ineligible2___1==1, 1, 0), NA)
+screendata$prior <- ifelse(screendata$seenathome==1,
+                           ifelse(screendata$res_prior_stomp==1, 1, 0), NA)
+screendata$noconsent <- ifelse(screendata$seenathome==1,
+                           ifelse(screendata$res_noconsent==1, 1, 0), NA)
+screendata$refused <- screendata$noconsent & !(screendata$ineligible | screendata$prior)
+screendata$excluded <- screendata$ineligible | screendata$prior | screendata$refused
+screendata$screened <- ifelse(screendata$seenathome & (!screendata$excluded | is.na(screendata$excluded)), ifelse(screendata$screening_id != "", 1, 0), NA)
+table(screendata$excluded, screendata$screened, useNA = 'ifany') # 4 eligible but not assigned a screening id 
+screendata$resulted <- ifelse(screendata$screened, ifelse(screendata$xpertscreen_result=="", 0, 1), NA)
+screendata %>% filter(seenathome==1) %>% count(ineligible, prior, refused, screened, resulted)
+screendata$positive <- ifelse(screendata$resulted, ifelse(screendata$xpertscreen_category==1, 1, 0), NA)
+
+
+# compare residents found at home, versus all described residents
+notseen <- table(members$res1_age) - table(subset(screendata,seenathome==1)$age)
+notseen <- as.numeric(rep(names(notseen), times = notseen))
+# subset(screendata,seenathome==1)$age[order(subset(screendata,seenathome==1)$age)] == as.numeric(rep(names(seen), times = seen))
+par(mfrow=c(1,2)); hist(notseen); hist(subset(screendata,seenathome==1)$age ) 
+t.test(notseen,
+       subset(screendata,seenathome==1)$age ) # those not home are slightly older
+wilcox.test(notseen, 
+       subset(screendata,seenathome==1)$age ) 
+(femalehome <- array(c(table(members$res1_female) - table(subset(screendata,seenathome==1)$female), 
+                           table(subset(screendata,seenathome==1)$female)), dim=c(2,2)))
+fisher.test(femalehome) 
+
+# compare to those screened away from home
+# by age first:
+# limit aways to those from the study area:
+t.test(notseen, subset(screendata, residentnumber==0 & screendata$res_parish %in% 1:3)$res_age) # those screened elsewhere slightly older tha those not at home
+t.test(subset(screendata,seenathome==1)$age, subset(screendata, residentnumber==0 & screendata$res_parish %in% 1:3)$res_age) # those screened elsewhere slightly older tha those not at home
+# and compare sex:
+femaway <- table(subset(screendata,residentnumber==0 & screendata$res_parish %in% 1:3)$female)
+femtable <- rbind(femalehome, femaway); rownames(femtable)=c("Seen at home", "Missed at home", "Seen elsewhere");
+  colnames(femtable)=c("Male","Female"); 
+fisher.test(rbind(femalehome[1,], femaway))
+fisher.test(rbind(femalehome[2,], femaway) )
+
+t.test(subset(screendata,seenathome==1)$age, subset(screendata, residentnumber==0 & screendata$res_parish %in% 1:3)$res_age) # those screened elsewhere slightly older tha those not at home
+par(mfrow=c(1,3)); hist(subset(screendata,seenathome==1)$age, main="Found at home" ); hist(notseen, main="Missed at home");  
+hist(subset(screendata, residentnumber==0 & res_parish %in% 1:3)$res_age, main="Screened elsewhere")
+median(subset(screendata,seenathome==1)$age, na.rm=T); median(notseen, na.rm=T); median(subset(screendata, residentnumber==0 & res_parish %in% 1:3)$res_age, na.rm=T)
+
+round(cbind(femtable, prop.table(femtable, margin = 1)),digits = 2)
+
+# found at home, trueeligible
+# screened away from home
+# cases, enrolled
+# cases, identified not enrolled
