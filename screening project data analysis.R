@@ -43,6 +43,9 @@ mean(!is.na(households$hh_res_no) | !is.na(households$hh_child))
 (sum(households$hh_res_no, na.rm=T) + sum(households$hh_child, na.rm=T))/mean(!is.na(households$hh_res_no) | !is.na(households$hh_child))
 # and the >15y population is:
 (sum(households$hh_res_no, na.rm=T) )/mean(!is.na(households$hh_res_no))
+# proportion with resident info data:
+(sum(households$hh_res_no, na.rm=T))/((sum(households$hh_res_no, na.rm=T) )/mean(!is.na(households$hh_res_no)))
+
 
 # number of households providing detailed info about their residents:
 sum(!is.na(households$res1_female)) # but it's possible we're missing info for resident 1
@@ -128,6 +131,8 @@ screendata$resulted <- ifelse(screendata$screened, ifelse(screendata$xpertscreen
 screendata %>% filter(seenathome==1) %>% count(ineligible, prior, refused, screened, resulted)
 screendata$positive <- ifelse(screendata$resulted, ifelse(screendata$xpertscreen_category==1, 1, 0), NA)
 
+screendata$screenedaway <- ifelse(screendata$residentnumber==0 & screendata$res_parish %in% 1:3, ifelse(screendata$screening_id != "", 1, 0), NA)
+
 
 # compare residents found at home, versus all described residents
 notseen <- table(members$res1_age) - table(subset(screendata,seenathome==1)$age)
@@ -138,8 +143,9 @@ t.test(notseen,
        subset(screendata,seenathome==1)$age ) # those not home are slightly older
 wilcox.test(notseen, 
        subset(screendata,seenathome==1)$age ) 
-(femalehome <- array(c(table(members$res1_female) - table(subset(screendata,seenathome==1)$female), 
-                           table(subset(screendata,seenathome==1)$female)), dim=c(2,2)))
+(femalehome <- array(c(table(subset(screendata,seenathome==1)$female), 
+                     table(members$res1_female) - table(subset(screendata,seenathome==1)$female)), 
+                      dim=c(2,2)))
 fisher.test(femalehome) 
 
 # compare to those screened away from home
@@ -148,11 +154,11 @@ fisher.test(femalehome)
 t.test(notseen, subset(screendata, residentnumber==0 & screendata$res_parish %in% 1:3)$res_age) # those screened elsewhere slightly older tha those not at home
 t.test(subset(screendata,seenathome==1)$age, subset(screendata, residentnumber==0 & screendata$res_parish %in% 1:3)$res_age) # those screened elsewhere slightly older tha those not at home
 # and compare sex:
-femaway <- table(subset(screendata,residentnumber==0 & screendata$res_parish %in% 1:3)$female)
-femtable <- rbind(femalehome, femaway); rownames(femtable)=c("Seen at home", "Missed at home", "Seen elsewhere");
+(femaway <- table(subset(screendata,residentnumber==0 & screendata$res_parish %in% 1:3)$female))
+(femtable <- rbind(femalehome, femaway)); rownames(femtable)=c("Seen at home", "Missed at home", "Seen elsewhere")
   colnames(femtable)=c("Male","Female"); 
-fisher.test(rbind(femalehome[1,], femaway))
-fisher.test(rbind(femalehome[2,], femaway) )
+fisher.test(rbind(femalehome[1,], femaway)) # found at home vs away
+fisher.test(rbind(femalehome[2,], femaway) ) # missed at home vs found away
 
 t.test(subset(screendata,seenathome==1)$age, subset(screendata, residentnumber==0 & screendata$res_parish %in% 1:3)$res_age) # those screened elsewhere slightly older tha those not at home
 par(mfrow=c(1,3)); hist(subset(screendata,seenathome==1)$age, main="Found at home" ); hist(notseen, main="Missed at home");  
@@ -160,6 +166,7 @@ hist(subset(screendata, residentnumber==0 & res_parish %in% 1:3)$res_age, main="
 median(subset(screendata,seenathome==1)$age, na.rm=T); median(notseen, na.rm=T); median(subset(screendata, residentnumber==0 & res_parish %in% 1:3)$res_age, na.rm=T)
 
 round(cbind(femtable, prop.table(femtable, margin = 1)),digits = 2)
+# but note that there a large minority of households where we got no data and don't have any "missed at home" data. 
 
 # among those found at home, screened versus not screened (ineligible or refused, with or without priors included)
 # very few 'ineligible', but will look at ineligibles (besides priors) and refusals, versus those screened:
@@ -167,17 +174,26 @@ screendata %>% filter(seenathome==1 & prior %in% c(NA,0)) %>% group_by(screened)
 # Those screened at home (versus refusal) are a little younger, more female, and less likely to be head of household, but differences are small.
 
 
+# some were excluded or refused because already on TB treatment (3), on IPT (1), or recently screened (sevearl): 
+#  (contrary to protocol, those already on treatment weren't enrolled as cases)
+# Other reasons for "refusal" included no guardian present, unable/unwilling to produce sputum, unable to speak
+levels(screendata$res_nocall_notes)
+screendata %>% filter(refused==1) %>% select(res_nocall_notes)
+
 ############# Prevalence of TB ####################
 screendata %>% filter(screened==1) %>% count(xpertscreen_category.factor) # consented at home
 screendata %>% filter(screenedaway==1) %>% count(xpertscreen_category.factor) # consented away
+
+screendata %>% filter(screenedaway==1) %>% group_by(venue_yn) %>% count(xpertscreen_category.factor) # split by type of away from home screening
+
 
 screendata %>% filter(screened==1 & as.Date(res_interact_date, format="%Y-%m-%d") < as.Date("2019-09-01", format="%Y-%m-%d")) %>% count(xpertscreen_category.factor) # consented at home
 screendata %>% filter(screenedaway==1 & as.Date(res_interact_date, format="%Y-%m-%d") < as.Date("2019-09-01", format="%Y-%m-%d")) %>% count(xpertscreen_category.factor) # consented away
 
 # sputum volume and quantity
 screendata %>% filter(screened==1|screenedaway==1) %>% count(xpertscreen_appearance)
-par(mfrow=c(1,1)); screendata %>% filter(screened==1|screenedaway==1) %>% select(xpertscreen_volume) %>% hist # looks like a long tail, but there are several in the 20-40 ml range, looks like intentionally entered data
-screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_volume < 5) %>% select(xpertscreen_volume) %>% hist
+par(mfrow=c(1,1)); screendata %>% filter(screened==1|screenedaway==1) %>% select(xpertscreen_volume) %>% unlist(.) %>% hist # looks like a long tail, but there are several in the 20-40 ml range, looks like intentionally entered data
+screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_volume < 5) %>% select(xpertscreen_volume) %>% unlist(.) %>% hist
 # could do sensiivity analysis that excludes those <1ml, or salivary (about half of all specimens), but probably best to assume they don't have true TB.
 
 # is salivary sputum associated with invalid results? No.
@@ -197,8 +213,15 @@ prev <- function(count)
 (screendata %>% filter(screened==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
 (screendata %>% filter(screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
 
-chisq.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$screened, 
+(screendata %>% filter(screenedaway==1 & venue_yn==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
+(screendata %>% filter(screenedaway==1 & venue_yn==0) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)) %>% prev(.)
+
+chisq.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$screenedaway, 
            subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$xpertscreen_category )
+fisher.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$screenedaway, 
+           subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$xpertscreen_category )
+
+# adjust for 
 
 # can add sensitivity analysis for poor quality (exclude provided low-volume specimens) and for rejected specimens (assume negative)
 
