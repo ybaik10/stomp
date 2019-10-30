@@ -1,8 +1,9 @@
 # read in screening project data
 # change file name to later local data file (don't store redcap data set on github)
-source("STOMPTBCommunityWide_R_2019-09-30_1156.r")
+source("STOMPTBCommunityWide_R_2019-10-25_1621.r")
 require(dplyr)
 require(binom)
+require(ggplot2)
 
 # copy the relevant household info to the start of each resident row
 # matching by record id
@@ -15,7 +16,7 @@ for (i in (1:nrow(data))[residentrows])
   datacopy[i,is.na(data[i,])] <- datacopy[household,is.na(data[i,])]
   if (i%%1000==0) print(i)
 }
-save(datacopy, file="datacopy_20190930.Rdata")
+save(datacopy, file="datacopy_20191025.Rdata")
 
 # load("datacopy_20190930.Rdata")
 
@@ -54,3 +55,9 @@ screendata$res_prior_stomp[screendata$res_check_iris_id=="6999644289592019030066
 
 table(screendata$xpertscreen_category, screendata$xpertscreen_category.factor)
 screendata$xpertscreen_category[screendata$xpertscreen_result=="INVALID"] <- 8
+
+
+screendata$ontbrx <- NA
+screendata$ontbrx[screendata$res_nocall_notes=="REPORTS TO BE ALREADY ON TB MEDICATION AT KISUGU HCIII"] <- "Kisugu"
+screendata$ontbrx[screendata$res_nocall_notes=="ON TREATMENT"] <- "Unknown"
+screendata$ontbrx[screendata$res_nocall_notes=="ALREADY ON TREATMENT DIAGNOSED FROM ALIVE MEDICAL SERVICES THUS PREFERS NOT TO SCREEN"] <- "Alive"

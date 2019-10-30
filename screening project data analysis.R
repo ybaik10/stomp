@@ -11,7 +11,7 @@ mean(households$hh_contact, na.rm=T)
 households %>% filter(hh_contact.factor=="No") %>% count(hh_neighbors.factor)
 # of those with no contact, we got info from neighbors for half, either about who the residents were (45%) or that the house was vacant (5%)
 households %>% count(hh_contact.factor, hh_neighbors.factor, hh_refusal.factor) # note here that refusal of "yes" means they didn't refuse
-# At about 10% of all houses visited (20% of those with someone home), someone was home but wouldn't speak with us
+# At about 10% of all houses visited (20% of those with someone home), someone was home but wouldn't/couldn't speak with us
 households %>% filter(hh_contact.factor=="Yes") %>% summarize(mean(hh_refusal.factor=="Yes", na.rm=T)) # 79% of households with someone home agreed to speak with us
 households %>% count(no_attempts) # we've visited very few houses more than once (probaly those where we were doing contact investigation or control selection?)
 hist(as.Date(households$hh_attempt1, format="%Y-%m-%d"), breaks = 10)
@@ -112,6 +112,8 @@ prior %>% filter(res_check_iris_id != "") %>% summarize(mean(!is.na(matchid)))
 
 # Most who reported prior participation were excluded from rescreening, even if prior participation couldn't be confirmed etc
 trueeligible <- eligible %>% filter(res_parishid %in% 1:3 & !(res_prior_stomp == 1))
+nrow(trueeligible)
+nrow(prior)
 
 # compare groups. dummary variables may be useful
 screendata$studyarea <- ifelse(screendata$res_parishid %in% 1:3, 1, 0)
@@ -130,9 +132,11 @@ table(screendata$excluded, screendata$screened, useNA = 'ifany') # 4 eligible bu
 screendata$resulted <- ifelse(screendata$screened, ifelse(screendata$xpertscreen_result=="", 0, 1), NA)
 screendata %>% filter(seenathome==1) %>% count(ineligible, prior, refused, screened, resulted)
 screendata$positive <- ifelse(screendata$resulted, ifelse(screendata$xpertscreen_category==1, 1, 0), NA)
+sum(screendata$screened, na.rm=T)
+sum(screendata$resulted, na.rm=T)
 
 screendata$screenedaway <- ifelse(screendata$residentnumber==0 & screendata$res_parish %in% 1:3, ifelse(screendata$screening_id != "", 1, 0), NA)
-
+sum(screendata$screenedaway, na.rm=T)
 
 # compare residents found at home, versus all described residents
 notseen <- table(members$res1_age) - table(subset(screendata,seenathome==1)$age)
@@ -166,6 +170,7 @@ hist(subset(screendata, residentnumber==0 & res_parish %in% 1:3)$res_age, main="
 median(subset(screendata,seenathome==1)$age, na.rm=T); median(notseen, na.rm=T); median(subset(screendata, residentnumber==0 & res_parish %in% 1:3)$res_age, na.rm=T)
 
 round(cbind(femtable, prop.table(femtable, margin = 1)),digits = 2)
+rbind(quantile(subset(screendata,seenathome==1)$age, c(0.25,0.5,0.75), na.rm=T), quantile(notseen, c(0.25,0.5,0.75), na.rm=T), quantile(subset(screendata, screenedaway==1)$age, c(0.25,0.5,0.75), na.rm=T))
 # but note that there a large minority of households where we got no data and don't have any "missed at home" data. 
 
 # among those found at home, screened versus not screened (ineligible or refused, with or without priors included)
@@ -179,6 +184,7 @@ screendata %>% filter(seenathome==1 & prior %in% c(NA,0)) %>% group_by(screened)
 # Other reasons for "refusal" included no guardian present, unable/unwilling to produce sputum, unable to speak
 levels(screendata$res_nocall_notes)
 screendata %>% filter(refused==1) %>% select(res_nocall_notes)
+screendata %>% filter(!is.na(ontbrx)) %>% select(res_check_iris_id, res_prior_stomp_iris, res_irisid) # don't have these. could look for names, need datset version with identifiers.
 
 ############# Prevalence of TB ####################
 screendata %>% filter(screened==1) %>% count(xpertscreen_category.factor) # consented at home
@@ -194,14 +200,27 @@ screendata %>% filter(screenedaway==1 & as.Date(res_interact_date, format="%Y-%m
 screendata %>% filter(screened==1|screenedaway==1) %>% count(xpertscreen_appearance)
 par(mfrow=c(1,1)); screendata %>% filter(screened==1|screenedaway==1) %>% select(xpertscreen_volume) %>% unlist(.) %>% hist # looks like a long tail, but there are several in the 20-40 ml range, looks like intentionally entered data
 screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_volume < 5) %>% select(xpertscreen_volume) %>% unlist(.) %>% hist
+screendata$lowvolume <- screendata$xpertscreen_volume <= 0.5
 # could do sensiivity analysis that excludes those <1ml, or salivary (about half of all specimens), but probably best to assume they don't have true TB.
 
 # is salivary sputum associated with invalid results? No.
 table(screendata$xpertscreen_appearance, screendata$xpertscreen_category.factor) #No it isn't, and many are positive. But there are several invalid/indeterminate with no appearance recorded. all rejected:
 screendata %>% filter(xpertscreen_category.factor=="Invalid or indeterminate") %>% select(xpertscreen_volume, xpertscreen_result_comment, xpertscreen_notes)
+# low volume associated with TB? Yes, only half as likely to be positive. 
+screendata %>% group_by(lowvolume) %>% summarize(mean(xpertscreen_category==1))
 
 screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% count(xpertscreen_category)
 screendata %>% filter(screened==1|screenedaway==1) %>% filter(xpertscreen_category %in% c(0,1)) %>% group_by(screenedaway) %>% count(xpertscreen_category)
+
+# cases found through screening:
+sum(screendata$xpertscreen_category==1, na.rm = T)
+# adding those already diagnosed elsewhere, and those diagnosed at health facility: 
+sum(screendata$xpertscreen_category==1, na.rm = T) + 56 # to estimate total preavlence, will need to distribute these HF cases over the entire community, not just those found during screening
+
+# community HF notification rate during community phase: 
+56/(sum(households$hh_res_no, na.rm=T) + sum(households$hh_child, na.rm=T))/mean(!is.na(households$hh_res_no) | !is.na(households$hh_child))
+
+
 
 # estimate prevalence among those screened, with binomial confidence intervals:
 prev <- function(count)
@@ -221,16 +240,19 @@ chisq.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_categor
 fisher.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$screenedaway, 
            subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_category %in% c(0,1)))$xpertscreen_category )
 
-# adjust for 
 
-# can add sensitivity analysis for poor quality (exclude provided low-volume specimens) and for rejected specimens (assume negative)
+screendata %>% group_by(xpertscreen_category==1, screenedaway) %>% summarize(median(res_age, na.rm=T), mean(res_female, na.rm=T))
 
 # characteristics of cases:
 # -	Sex and age, compared to overall and screened populations
+# compared to screened first because it's easiest:
+
+
 # -	Variation in prevalence by zone
-# -	Income/employment/education/etc (versus com controls?)
+# -	Income/employment/education/etc (versus com controls?) -- will need to more to the case dataset for this and below.
 # -	Migration of cases (versus com controls?) incl time in study area and frequency of short- and long-distance travel
-# -	Variation in prevalence by screening location/approach
+
+# adjust prevalence for demographics?
 
 
 
@@ -248,3 +270,20 @@ fisher.test(subset(screendata, (screened==1|screenedaway==1)&(xpertscreen_catego
 # Differences between 
 # cases, enrolled
 # cases, identified not enrolled
+
+# Xpert levels compared
+table(screendata$xpertscreen_result)
+comlevels <- c(1+47+2,1+7+2,7,11,6)
+names(comlevels) <- c("Trace","Very low", "Low", "Medium", "High")
+barplot(comlevels)
+
+casedata <- subset(d_original, participanttype==1)
+hflevels <- table(casedata$labtbxprslt_qty)[c(5,1:4)]
+names(hflevels) <- names(comlevels)
+
+par(mfrow=c(1,2))
+cols <- RColorBrewer::brewer.pal(5, "Reds")
+barplot(hflevels, main="Health Facility Cases", ylab="N", col=cols)
+barplot(comlevels, main="Community cases", col=cols)
+mtext("Level of Xpert positivity", side=1, outer=T, line=-2)
+
