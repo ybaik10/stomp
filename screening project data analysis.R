@@ -1,4 +1,4 @@
-source("screening data cleaning.R") # takes a while to run, may want to load saved files instead
+# source("screening data cleaning.R") # takes a while to run, may want to load saved files instead
 
 # summary of household resident numbers screened, with 0 for away from homes and NA for households:
 table(screendata$residentnumber, useNA = "ifany")
